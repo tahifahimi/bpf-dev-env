@@ -17,7 +17,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install --fix-missing -y git build-es
  libcap-dev libdisasm-dev binutils-dev unzip \
  pkg-config lsb-release wget software-properties-common gnupg zlib1g llvm \
  qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virtinst libvirt-daemon xterm attr busybox openssh-server \
- iputils-ping kmod
+ iputils-ping kmod \
+ vim 
 
 # clang and llvm
 RUN DEBIAN_FRONTEND=noninteractive apt-get update
