@@ -44,8 +44,7 @@ int main(int argc, char* argv[]) {
 
         // Print once per interval with floating-point timestamp.
         if (t_now >= next_mark) {
-            // printf("%.3f:%d\n", elapsed, num_calls_interval);
-            printf("%d\n", num_calls_interval);
+            printf("%.3f:%d\n", elapsed, num_calls_interval);
             num_calls_interval = 0;
             // Move to the next interval; handle drift by stepping forward repeatedly if needed.
             do { next_mark += interval_sec; } while (t_now >= next_mark);
