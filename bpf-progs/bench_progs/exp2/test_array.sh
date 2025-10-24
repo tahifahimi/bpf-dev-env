@@ -1,10 +1,17 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
-# Experiment 2 - Test runner for null_fentry_array.kern.c functions
-# Tests all three functions in the null_fentry_array.kern.c file:
+# Experiment 2 - Test runner for fentry array and hash map functions
+# Tests all functions in both null_fentry_array.kern.c and null_fentry_hash.kern.c:
+#
+# Array Map Functions:
 # - array_map_lookup_fentry: Basic array lookup operation
 # - array_map_update_fentry: Array update operation  
-# - array_map_stress_lookup: Stress test with 64 lookups
+# - array_map_stress_lookup: Stress test with 64 array lookups
+#
+# Hash Map Functions:
+# - hash_map_lookup_fentry: Basic hash lookup operation
+# - hash_map_update_fentry: Hash update operation
+# - hash_map_stress_lookup: Stress test with 64 hash lookups
 
 set -e
 
@@ -14,23 +21,34 @@ INTERVAL=0.5
 RESULTS_DIR="results_$(date +%Y%m%d_%H%M%S)"
 
 # Map test variants (BPF programs to test)
-# Note: null_fentry_array.kern.c contains multiple functions but only one can be attached at a time
+# Note: Both .kern.c files contain multiple functions but only one can be attached at a time
 # Each test loads the same .o file but different functions will be attached based on program name
 TESTS=(
-    "null_fentry_array.kern.o:array_map_update_fentry:Array-Update-Fentry" 
+    # Array Map Tests - null_fentry_array.kern.c
     "null_fentry_array.kern.o:array_map_lookup_fentry:Array-Lookup-Fentry"
+    "null_fentry_array.kern.o:array_map_update_fentry:Array-Update-Fentry" 
     "null_fentry_array.kern.o:array_map_stress_lookup:Array-Stress-Lookup-Fentry"
+    
+    # Hash Map Tests - null_fentry_hash.kern.c
+    "null_fentry_hash.kern.o:hash_map_lookup_fentry:Hash-Lookup-Fentry"
+    "null_fentry_hash.kern.o:hash_map_update_fentry:Hash-Update-Fentry"
+    "null_fentry_hash.kern.o:hash_map_stress_lookup:Hash-Stress-Lookup-Fentry"
+    "null_fentry_hash.kern.o:hash_map_delete:Hash-Delete-Fentry"
 )
 
 # Create results directory
 mkdir -p "$RESULTS_DIR"
 
 echo "============================================"
-echo "  Testing null_fentry_array.kern.c Functions"
+echo "  Testing Fentry Array & Hash Map Functions"
 echo "============================================"
-echo "Note: The BPF program contains multiple functions with the same"
+echo "Testing functions from:"
+echo "  - null_fentry_array.kern.c (3 array functions)"
+echo "  - null_fentry_hash.kern.c (3 hash functions)"
+echo ""
+echo "Note: Each BPF program contains multiple functions with the same"
 echo "      attachment point. Only one can be active at a time."
-echo "      This test attempts to load each function individually."
+echo "      This test loads each function individually."
 echo "Duration: ${DURATION}s per test"
 echo "Interval: ${INTERVAL}s"
 echo "Results: $RESULTS_DIR"
