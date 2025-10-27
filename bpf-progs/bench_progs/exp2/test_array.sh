@@ -17,6 +17,13 @@
 # - queue_map_push_fentry: Push (enqueue) operation
 # - queue_map_pop_fentry: Pop (dequeue) operation
 # - queue_map_peek_fentry: Peek operation (read without removing)
+#
+# Ring Buffer Functions:
+# - ringbuf_map_reserve_fentry: Ring buffer reserve operation
+# - ringbuf_map_submit_fentry: Ring buffer reserve and submit operation
+# - ringbuf_output_fentry: Ring buffer direct output operation
+# - ringbuf_dynptr_submit_fentry: Ring buffer dynptr reserve, write and submit
+# - ringbuf_dynptr_read_fentry: Ring buffer dynptr reserve and read
 
 set -e
 
@@ -44,18 +51,26 @@ TESTS=(
     "null_fentry_queue.kern.o:queue_map_push_fentry:Queue-Push-Fentry"
     "null_fentry_queue.kern.o:queue_map_pop_fentry:Queue-Pop-Fentry"
     "null_fentry_queue.kern.o:queue_map_peek_fentry:Queue-Peek-Fentry"
+    
+    # Ring Buffer Tests - null_fentry_ringbuf.kern.c
+    "null_fentry_ringbuf.kern.o:ringbuf_map_reserve_fentry:Ringbuf-Reserve-Fentry"
+    "null_fentry_ringbuf.kern.o:ringbuf_map_submit_fentry:Ringbuf-Submit-Fentry"
+    "null_fentry_ringbuf.kern.o:ringbuf_output_fentry:Ringbuf-Output-Fentry"
+    "null_fentry_ringbuf.kern.o:ringbuf_dynptr_submit_fentry:Ringbuf-Dynptr-Submit-Fentry"
+    "null_fentry_ringbuf.kern.o:ringbuf_dynptr_read_fentry:Ringbuf-Dynptr-Read-Fentry"
 )
 
 # Create results directory
 mkdir -p "$RESULTS_DIR"
 
 echo "============================================"
-echo "  Testing Fentry Array, Hash & Queue Map Functions"
+echo "  Testing Fentry Array, Hash, Queue & Ringbuf Functions"
 echo "============================================"
 echo "Testing functions from:"
 echo "  - null_fentry_array.kern.c (3 array functions)"
 echo "  - null_fentry_hash.kern.c (4 hash functions)"
 echo "  - null_fentry_queue.kern.c (3 queue functions)"
+echo "  - null_fentry_ringbuf.kern.c (5 ringbuf functions)"
 echo ""
 echo "Note: Each BPF program contains multiple functions with the same"
 echo "      attachment point. Only one can be active at a time."
@@ -127,7 +142,7 @@ done
 
 # Generate summary report
 SUMMARY_FILE="${RESULTS_DIR}/SUMMARY.md"
-echo "# Array, Hash & Queue Map Fentry Functions Test Results Summary" > "$SUMMARY_FILE"
+echo "# Array, Hash, Queue & Ringbuf Fentry Functions Test Results Summary" > "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
 echo "Generated: $(date)" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
@@ -138,6 +153,7 @@ echo "- Total tests: ${#TESTS[@]}" >> "$SUMMARY_FILE"
 echo "- Array functions: 3 (lookup, update, stress)" >> "$SUMMARY_FILE"
 echo "- Hash functions: 4 (lookup, update, stress, delete)" >> "$SUMMARY_FILE"
 echo "- Queue functions: 3 (push, pop, peek)" >> "$SUMMARY_FILE"
+echo "- Ringbuf functions: 5 (reserve, submit, output, dynptr-submit, dynptr-read)" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
 echo "## Results" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
@@ -162,17 +178,19 @@ done
 echo "" >> "$SUMMARY_FILE"
 echo "## Performance Analysis" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
-echo "### Array vs Hash vs Queue Map Comparison" >> "$SUMMARY_FILE"
+echo "### Array vs Hash vs Queue vs Ringbuf Comparison" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
 echo "**Expected Performance Ranking (Fastest → Slowest):**" >> "$SUMMARY_FILE"
 echo "1. Array operations (direct index access)" >> "$SUMMARY_FILE"
-echo "2. Queue operations (FIFO ordering, no key hashing)" >> "$SUMMARY_FILE"
-echo "3. Hash operations (hash computation + bucket lookup)" >> "$SUMMARY_FILE"
+echo "2. Ring buffer operations (high-performance circular buffer)" >> "$SUMMARY_FILE"
+echo "3. Queue operations (FIFO ordering, no key hashing)" >> "$SUMMARY_FILE"
+echo "4. Hash operations (hash computation + bucket lookup)" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
 echo "**Operation Types:**" >> "$SUMMARY_FILE"
 echo "- **Array**: Lookup, Update, Stress (64 lookups)" >> "$SUMMARY_FILE"
 echo "- **Hash**: Lookup, Update, Stress (64 lookups), Delete" >> "$SUMMARY_FILE"
 echo "- **Queue**: Push (enqueue), Pop (dequeue), Peek (read front)" >> "$SUMMARY_FILE"
+echo "- **Ringbuf**: Reserve, Submit (reserve+write+submit), Output (direct), Dynptr-Submit (dynptr API), Dynptr-Read (dynptr read)" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
 
 # Generate performance comparison
@@ -198,15 +216,30 @@ queue_pop=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Queue-Pop-Fentry.tx
             awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
 queue_peek=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Queue-Peek-Fentry.txt" 2>/dev/null | \
              awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+ringbuf_reserve=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Ringbuf-Reserve-Fentry.txt" 2>/dev/null | \
+                  awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+ringbuf_submit=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Ringbuf-Submit-Fentry.txt" 2>/dev/null | \
+                 awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+ringbuf_output=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Ringbuf-Output-Fentry.txt" 2>/dev/null | \
+                 awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+ringbuf_dynptr_submit=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Ringbuf-Dynptr-Submit-Fentry.txt" 2>/dev/null | \
+                       awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+ringbuf_dynptr_read=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Ringbuf-Dynptr-Read-Fentry.txt" 2>/dev/null | \
+                     awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
 
-echo "| Operation | Array Calls/Interval | Hash Calls/Interval | Queue Calls/Interval | Hash vs Array | Queue vs Array |" >> "$SUMMARY_FILE"
-echo "|-----------|---------------------|-------------------|---------------------|--------------|---------------|" >> "$SUMMARY_FILE"
-echo "| Lookup | $array_lookup | $hash_lookup | N/A | $(if [[ "$array_lookup" != "N/A" && "$hash_lookup" != "N/A" && "$array_lookup" -gt 0 ]]; then echo "scale=1; ($array_lookup - $hash_lookup) * 100 / $array_lookup" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A |" >> "$SUMMARY_FILE"
-echo "| Update | $array_update | $hash_update | N/A | $(if [[ "$array_update" != "N/A" && "$hash_update" != "N/A" && "$array_update" -gt 0 ]]; then echo "scale=1; ($array_update - $hash_update) * 100 / $array_update" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A |" >> "$SUMMARY_FILE"
-echo "| Stress | $array_stress | $hash_stress | N/A | $(if [[ "$array_stress" != "N/A" && "$hash_stress" != "N/A" && "$array_stress" -gt 0 ]]; then echo "scale=1; ($array_stress - $hash_stress) * 100 / $array_stress" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A |" >> "$SUMMARY_FILE"
-echo "| Push | N/A | N/A | $queue_push | N/A | N/A |" >> "$SUMMARY_FILE"
-echo "| Pop | N/A | N/A | $queue_pop | N/A | N/A |" >> "$SUMMARY_FILE"
-echo "| Peek | N/A | N/A | $queue_peek | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Operation | Array Calls/Interval | Hash Calls/Interval | Queue Calls/Interval | Ringbuf Calls/Interval | Hash vs Array | Queue vs Array | Ringbuf vs Array |" >> "$SUMMARY_FILE"
+echo "|-----------|---------------------|-------------------|---------------------|----------------------|--------------|---------------|-----------------|" >> "$SUMMARY_FILE"
+echo "| Lookup | $array_lookup | $hash_lookup | N/A | N/A | $(if [[ "$array_lookup" != "N/A" && "$hash_lookup" != "N/A" && "$array_lookup" -gt 0 ]]; then echo "scale=1; ($array_lookup - $hash_lookup) * 100 / $array_lookup" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Update | $array_update | $hash_update | N/A | N/A | $(if [[ "$array_update" != "N/A" && "$hash_update" != "N/A" && "$array_update" -gt 0 ]]; then echo "scale=1; ($array_update - $hash_update) * 100 / $array_update" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Stress | $array_stress | $hash_stress | N/A | N/A | $(if [[ "$array_stress" != "N/A" && "$hash_stress" != "N/A" && "$array_stress" -gt 0 ]]; then echo "scale=1; ($array_stress - $hash_stress) * 100 / $array_stress" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Push | N/A | N/A | $queue_push | N/A | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Pop | N/A | N/A | $queue_pop | N/A | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Peek | N/A | N/A | $queue_peek | N/A | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Reserve | N/A | N/A | N/A | $ringbuf_reserve | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Submit | N/A | N/A | N/A | $ringbuf_submit | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Output | N/A | N/A | N/A | $ringbuf_output | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Dynptr-Submit | N/A | N/A | N/A | $ringbuf_dynptr_submit | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Dynptr-Read | N/A | N/A | N/A | $ringbuf_dynptr_read | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
 
 echo "" >> "$SUMMARY_FILE"
 echo "## Analysis Commands" >> "$SUMMARY_FILE"
@@ -227,9 +260,18 @@ echo "" >> "$SUMMARY_FILE"
 echo "## Key Insights" >> "$SUMMARY_FILE"
 echo "" >> "$SUMMARY_FILE"
 echo "- **Array maps** provide baseline performance (direct index access)" >> "$SUMMARY_FILE"
+echo "- **Ring buffers** offer high-performance kernel-to-userspace data transfer" >> "$SUMMARY_FILE"
+echo "- **Queue maps** provide FIFO semantics with moderate overhead" >> "$SUMMARY_FILE"
 echo "- **Hash maps** show additional overhead from hash computation" >> "$SUMMARY_FILE"
 echo "- **Stress tests** amplify the differences (64x the overhead)" >> "$SUMMARY_FILE"
 echo "- **Fentry attachment** provides low-overhead benchmarking" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "### Ring Buffer Operation Comparison:" >> "$SUMMARY_FILE"
+echo "- **Reserve**: Only reserves space (fastest)" >> "$SUMMARY_FILE"
+echo "- **Submit**: Reserve + write + submit (moderate)" >> "$SUMMARY_FILE"
+echo "- **Output**: Direct output with internal reserve/submit (varies)" >> "$SUMMARY_FILE"
+echo "- **Dynptr-Submit**: Reserve + dynptr write + submit (dynptr API overhead)" >> "$SUMMARY_FILE"
+echo "- **Dynptr-Read**: Reserve + dynptr read (read-only operation)" >> "$SUMMARY_FILE"
 
 echo ""
 echo "============================================"
