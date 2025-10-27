@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
-# Experiment 2 - Test runner for fentry array and hash map functions
-# Tests all functions in both null_fentry_array.kern.c and null_fentry_hash.kern.c:
+# Experiment 2 - Test runner for fentry array, hash, and queue map functions
+# Tests all functions in null_fentry_array.kern.c, null_fentry_hash.kern.c, and null_fentry_queue.kern.c:
 #
 # Array Map Functions:
 # - array_map_lookup_fentry: Basic array lookup operation
@@ -12,6 +12,11 @@
 # - hash_map_lookup_fentry: Basic hash lookup operation
 # - hash_map_update_fentry: Hash update operation
 # - hash_map_stress_lookup: Stress test with 64 hash lookups
+#
+# Queue Map Functions:
+# - queue_map_push_fentry: Push (enqueue) operation
+# - queue_map_pop_fentry: Pop (dequeue) operation
+# - queue_map_peek_fentry: Peek operation (read without removing)
 
 set -e
 
@@ -21,12 +26,12 @@ INTERVAL=0.5
 RESULTS_DIR="results_$(date +%Y%m%d_%H%M%S)"
 
 # Map test variants (BPF programs to test)
-# Note: Both .kern.c files contain multiple functions but only one can be attached at a time
+# Note: All .kern.c files contain multiple functions but only one can be attached at a time
 # Each test loads the same .o file but different functions will be attached based on program name
 TESTS=(
     # Array Map Tests - null_fentry_array.kern.c
+    "null_fentry_array.kern.o:array_map_update_fentry:Array-Update-Fentry"
     "null_fentry_array.kern.o:array_map_lookup_fentry:Array-Lookup-Fentry"
-    "null_fentry_array.kern.o:array_map_update_fentry:Array-Update-Fentry" 
     "null_fentry_array.kern.o:array_map_stress_lookup:Array-Stress-Lookup-Fentry"
     
     # Hash Map Tests - null_fentry_hash.kern.c
@@ -34,17 +39,23 @@ TESTS=(
     "null_fentry_hash.kern.o:hash_map_update_fentry:Hash-Update-Fentry"
     "null_fentry_hash.kern.o:hash_map_stress_lookup:Hash-Stress-Lookup-Fentry"
     "null_fentry_hash.kern.o:hash_map_delete:Hash-Delete-Fentry"
+    
+    # Queue Map Tests - null_fentry_queue.kern.c
+    "null_fentry_queue.kern.o:queue_map_push_fentry:Queue-Push-Fentry"
+    "null_fentry_queue.kern.o:queue_map_pop_fentry:Queue-Pop-Fentry"
+    "null_fentry_queue.kern.o:queue_map_peek_fentry:Queue-Peek-Fentry"
 )
 
 # Create results directory
 mkdir -p "$RESULTS_DIR"
 
 echo "============================================"
-echo "  Testing Fentry Array & Hash Map Functions"
+echo "  Testing Fentry Array, Hash & Queue Map Functions"
 echo "============================================"
 echo "Testing functions from:"
 echo "  - null_fentry_array.kern.c (3 array functions)"
-echo "  - null_fentry_hash.kern.c (3 hash functions)"
+echo "  - null_fentry_hash.kern.c (4 hash functions)"
+echo "  - null_fentry_queue.kern.c (3 queue functions)"
 echo ""
 echo "Note: Each BPF program contains multiple functions with the same"
 echo "      attachment point. Only one can be active at a time."
@@ -113,3 +124,120 @@ for test_spec in "${TESTS[@]}"; do
     # Short pause between tests
     sleep 2
 done
+
+# Generate summary report
+SUMMARY_FILE="${RESULTS_DIR}/SUMMARY.md"
+echo "# Array, Hash & Queue Map Fentry Functions Test Results Summary" > "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "Generated: $(date)" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "## Test Configuration" >> "$SUMMARY_FILE"
+echo "- Duration: ${DURATION}s per test" >> "$SUMMARY_FILE"
+echo "- Interval: ${INTERVAL}s" >> "$SUMMARY_FILE"
+echo "- Total tests: ${#TESTS[@]}" >> "$SUMMARY_FILE"
+echo "- Array functions: 3 (lookup, update, stress)" >> "$SUMMARY_FILE"
+echo "- Hash functions: 4 (lookup, update, stress, delete)" >> "$SUMMARY_FILE"
+echo "- Queue functions: 3 (push, pop, peek)" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "## Results" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "| Test Name | BPF Program | Function | Avg Calls/Interval | Result File |" >> "$SUMMARY_FILE"
+echo "|-----------|-------------|----------|-------------------|-------------|" >> "$SUMMARY_FILE"
+
+# Extract average calls per interval from each result file
+for test_spec in "${TESTS[@]}"; do
+    IFS=':' read -r bpf_prog prog_name test_name <<< "$test_spec"
+    result_file="${RESULTS_DIR}/${test_name}.txt"
+    
+    if [ -f "$result_file" ]; then
+        # Calculate average from all intervals (format: timestamp:calls)
+        avg_calls=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "$result_file" | \
+                    awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+        echo "| $test_name | $bpf_prog | $prog_name | $avg_calls | $test_name.txt |" >> "$SUMMARY_FILE"
+    else
+        echo "| $test_name | $bpf_prog | $prog_name | ERROR | $test_name.txt |" >> "$SUMMARY_FILE"
+    fi
+done
+
+echo "" >> "$SUMMARY_FILE"
+echo "## Performance Analysis" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "### Array vs Hash vs Queue Map Comparison" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "**Expected Performance Ranking (Fastest → Slowest):**" >> "$SUMMARY_FILE"
+echo "1. Array operations (direct index access)" >> "$SUMMARY_FILE"
+echo "2. Queue operations (FIFO ordering, no key hashing)" >> "$SUMMARY_FILE"
+echo "3. Hash operations (hash computation + bucket lookup)" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "**Operation Types:**" >> "$SUMMARY_FILE"
+echo "- **Array**: Lookup, Update, Stress (64 lookups)" >> "$SUMMARY_FILE"
+echo "- **Hash**: Lookup, Update, Stress (64 lookups), Delete" >> "$SUMMARY_FILE"
+echo "- **Queue**: Push (enqueue), Pop (dequeue), Peek (read front)" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+
+# Generate performance comparison
+echo "### Detailed Comparison" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+
+# Extract specific metrics for comparison
+array_lookup=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Array-Lookup-Fentry.txt" 2>/dev/null | \
+               awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+hash_lookup=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Hash-Lookup-Fentry.txt" 2>/dev/null | \
+              awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+array_update=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Array-Update-Fentry.txt" 2>/dev/null | \
+               awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+hash_update=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Hash-Update-Fentry.txt" 2>/dev/null | \
+              awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+array_stress=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Array-Stress-Lookup-Fentry.txt" 2>/dev/null | \
+               awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+hash_stress=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Hash-Stress-Lookup-Fentry.txt" 2>/dev/null | \
+              awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+queue_push=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Queue-Push-Fentry.txt" 2>/dev/null | \
+             awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+queue_pop=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Queue-Pop-Fentry.txt" 2>/dev/null | \
+            awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+queue_peek=$(grep -E "^[0-9]+\.[0-9]+:[0-9]+" "${RESULTS_DIR}/Queue-Peek-Fentry.txt" 2>/dev/null | \
+             awk -F: '{sum+=$2; count++} END {if(count>0) printf "%.0f", sum/count; else print "N/A"}')
+
+echo "| Operation | Array Calls/Interval | Hash Calls/Interval | Queue Calls/Interval | Hash vs Array | Queue vs Array |" >> "$SUMMARY_FILE"
+echo "|-----------|---------------------|-------------------|---------------------|--------------|---------------|" >> "$SUMMARY_FILE"
+echo "| Lookup | $array_lookup | $hash_lookup | N/A | $(if [[ "$array_lookup" != "N/A" && "$hash_lookup" != "N/A" && "$array_lookup" -gt 0 ]]; then echo "scale=1; ($array_lookup - $hash_lookup) * 100 / $array_lookup" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A |" >> "$SUMMARY_FILE"
+echo "| Update | $array_update | $hash_update | N/A | $(if [[ "$array_update" != "N/A" && "$hash_update" != "N/A" && "$array_update" -gt 0 ]]; then echo "scale=1; ($array_update - $hash_update) * 100 / $array_update" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A |" >> "$SUMMARY_FILE"
+echo "| Stress | $array_stress | $hash_stress | N/A | $(if [[ "$array_stress" != "N/A" && "$hash_stress" != "N/A" && "$array_stress" -gt 0 ]]; then echo "scale=1; ($array_stress - $hash_stress) * 100 / $array_stress" | bc -l | sed 's/^\./0./'%; else echo "N/A"; fi) | N/A |" >> "$SUMMARY_FILE"
+echo "| Push | N/A | N/A | $queue_push | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Pop | N/A | N/A | $queue_pop | N/A | N/A |" >> "$SUMMARY_FILE"
+echo "| Peek | N/A | N/A | $queue_peek | N/A | N/A |" >> "$SUMMARY_FILE"
+
+echo "" >> "$SUMMARY_FILE"
+echo "## Analysis Commands" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "To analyze results:" >> "$SUMMARY_FILE"
+echo '```bash' >> "$SUMMARY_FILE"
+echo "# View individual test results" >> "$SUMMARY_FILE"
+echo "cat $RESULTS_DIR/<test-name>.txt" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "# Compare throughput across all tests" >> "$SUMMARY_FILE"
+echo "grep -h \"Avg Calls\" $RESULTS_DIR/*.txt" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "# View this summary" >> "$SUMMARY_FILE"
+echo "cat $SUMMARY_FILE" >> "$SUMMARY_FILE"
+echo '```' >> "$SUMMARY_FILE"
+
+echo "" >> "$SUMMARY_FILE"
+echo "## Key Insights" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
+echo "- **Array maps** provide baseline performance (direct index access)" >> "$SUMMARY_FILE"
+echo "- **Hash maps** show additional overhead from hash computation" >> "$SUMMARY_FILE"
+echo "- **Stress tests** amplify the differences (64x the overhead)" >> "$SUMMARY_FILE"
+echo "- **Fentry attachment** provides low-overhead benchmarking" >> "$SUMMARY_FILE"
+
+echo ""
+echo "============================================"
+echo "  All tests complete!"
+echo "============================================"
+echo "Results directory: $RESULTS_DIR"
+echo "Summary: $SUMMARY_FILE"
+echo ""
+echo "To view summary:"
+echo "  cat $SUMMARY_FILE"
+echo ""
